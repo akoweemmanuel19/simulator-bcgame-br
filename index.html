@@ -40,6 +40,7 @@
   <div class="bg-white shadow-md rounded-lg p-6 w-full max-w-3xl">
     <canvas id="bankrollChart" class="w-full h-64 mb-6"></canvas>
     <div id="summary" class="text-gray-700 font-medium"></div>
+    <div id="maxLossStreak" class="text-gray-700 font-medium mt-2"></div>
   </div>
 
 <script>
@@ -51,14 +52,21 @@ function simulateDice(bankroll, baseBet, increaseFactor, numTours, cote) {
     let bet = baseBet;
     const results = [];
 
+    let currentLossStreak = 0;
+    let maxLossStreak = 0;
+
     for (let i = 0; i < numTours; i++) {
         if (bet > currentBankroll) break;
-        if (Math.random() < 0.5) { // gain
+
+        if (Math.random() < 0.32) { // gain (probabilité ajustable)
             currentBankroll += bet * (cote - 1);
             bet = baseBet;
+            currentLossStreak = 0; // reset streak
         } else { // perte
             currentBankroll -= bet;
             bet *= increaseFactor;
+            currentLossStreak++;
+            if(currentLossStreak > maxLossStreak) maxLossStreak = currentLossStreak;
         }
         results.push(currentBankroll);
     }
@@ -66,7 +74,7 @@ function simulateDice(bankroll, baseBet, increaseFactor, numTours, cote) {
     const maxDrawdown = Math.max(...results.map(v => Math.max(...results) - v));
     const finalBankroll = results[results.length - 1] || currentBankroll;
 
-    return {results, maxDrawdown, finalBankroll};
+    return {results, maxDrawdown, finalBankroll, maxLossStreak};
 }
 
 document.getElementById('simulateBtn').addEventListener('click', () => {
@@ -76,7 +84,7 @@ document.getElementById('simulateBtn').addEventListener('click', () => {
     const odds = parseFloat(document.getElementById('odds').value);
     const tours = parseInt(document.getElementById('tours').value);
 
-    const {results, maxDrawdown, finalBankroll} = simulateDice(bankroll, baseBet, increase, tours, odds);
+    const {results, maxDrawdown, finalBankroll, maxLossStreak} = simulateDice(bankroll, baseBet, increase, tours, odds);
 
     // Mettre à jour le graphique
     if(chart) chart.destroy();
@@ -102,6 +110,9 @@ document.getElementById('simulateBtn').addEventListener('click', () => {
     document.getElementById('summary').innerHTML = `
         Bankroll finale : <span class="font-bold">${finalBankroll.toLocaleString()} VEF</span><br>
         Max drawdown : <span class="font-bold">${maxDrawdown.toLocaleString()} VEF</span>
+    `;
+    document.getElementById('maxLossStreak').innerHTML = `
+        Plus longue série de pertes : <span class="font-bold">${maxLossStreak}</span> tours
     `;
 });
 </script>
