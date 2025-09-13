@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulateur Dice R2Cap</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center p-6">
+
+  <h1 class="text-3xl font-bold mb-6 text-gray-800">Simulateur Dice R2Cap</h1>
+
+  <div class="bg-white shadow-md rounded-lg p-6 w-full max-w-xl mb-6">
+    <div class="space-y-4">
+      <div>
+        <label class="block font-medium mb-1">Bankroll (VEF)</label>
+        <input id="bankroll" type="number" value="1000000000" class="w-full border rounded p-2">
+      </div>
+      <div>
+        <label class="block font-medium mb-1">Mise de départ (VEF)</label>
+        <input id="baseBet" type="number" value="100000" class="w-full border rounded p-2">
+      </div>
+      <div>
+        <label class="block font-medium mb-1">Augmentation après perte (%)</label>
+        <input id="increase" type="number" value="45" class="w-full border rounded p-2">
+      </div>
+      <div>
+        <label class="block font-medium mb-1">Cote</label>
+        <input id="odds" type="number" value="3" step="0.1" class="w-full border rounded p-2">
+      </div>
+      <div>
+        <label class="block font-medium mb-1">Nombre de tours</label>
+        <input id="tours" type="number" value="2000" class="w-full border rounded p-2">
+      </div>
+      <button id="simulateBtn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">Lancer la simulation</button>
+    </div>
+  </div>
+
+  <div class="bg-white shadow-md rounded-lg p-6 w-full max-w-3xl">
+    <canvas id="bankrollChart" class="w-full h-64 mb-6"></canvas>
+    <div id="summary" class="text-gray-700 font-medium"></div>
+  </div>
+
+<script>
+const ctx = document.getElementById('bankrollChart').getContext('2d');
+let chart = null;
+
+function simulateDice(bankroll, baseBet, increaseFactor, numTours, cote) {
+    let currentBankroll = bankroll;
+    let bet = baseBet;
+    const results = [];
+
+    for (let i = 0; i < numTours; i++) {
+        if (bet > currentBankroll) break;
+        if (Math.random() < 0.5) { // gain
+            currentBankroll += bet * (cote - 1);
+            bet = baseBet;
+        } else { // perte
+            currentBankroll -= bet;
+            bet *= increaseFactor;
+        }
+        results.push(currentBankroll);
+    }
+
+    const maxDrawdown = Math.max(...results.map(v => Math.max(...results) - v));
+    const finalBankroll = results[results.length - 1] || currentBankroll;
+
+    return {results, maxDrawdown, finalBankroll};
+}
+
+document.getElementById('simulateBtn').addEventListener('click', () => {
+    const bankroll = parseFloat(document.getElementById('bankroll').value);
+    const baseBet = parseFloat(document.getElementById('baseBet').value);
+    const increase = parseFloat(document.getElementById('increase').value)/100 + 1;
+    const odds = parseFloat(document.getElementById('odds').value);
+    const tours = parseInt(document.getElementById('tours').value);
+
+    const {results, maxDrawdown, finalBankroll} = simulateDice(bankroll, baseBet, increase, tours, odds);
+
+    // Mettre à jour le graphique
+    if(chart) chart.destroy();
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: results.map((_, i) => i+1),
+            datasets: [{
+                label: 'Bankroll (VEF)',
+                data: results,
+                borderColor: 'rgb(59 130 246)',
+                backgroundColor: 'rgba(59,130,246,0.2)',
+                tension: 0.2
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {legend:{display:false}}
+        }
+    });
+
+    // Mettre à jour le résumé
+    document.getElementById('summary').innerHTML = `
+        Bankroll finale : <span class="font-bold">${finalBankroll.toLocaleString()} VEF</span><br>
+        Max drawdown : <span class="font-bold">${maxDrawdown.toLocaleString()} VEF</span>
+    `;
+});
+</script>
+
+</body>
+</html>
