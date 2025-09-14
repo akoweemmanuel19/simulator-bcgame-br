@@ -24,7 +24,11 @@
       </div>
       <div>
         <label class="block font-medium mb-1">Augmentation après perte (%)</label>
-        <input id="increase" type="number" value="45" class="w-full border rounded p-2">
+        <input id="increaseLoss" type="number" value="45" class="w-full border rounded p-2">
+      </div>
+      <div>
+        <label class="block font-medium mb-1">Augmentation après gain (%)</label>
+        <input id="increaseWin" type="number" value="0" class="w-full border rounded p-2">
       </div>
       <div>
         <label class="block font-medium mb-1">Cote</label>
@@ -58,7 +62,7 @@
 const ctx = document.getElementById('bankrollChart').getContext('2d');
 let chart = null;
 
-function simulateDice(bankroll, baseBet, increaseFactor, numTours, cote, profitTarget=null) {
+function simulateDice(bankroll, baseBet, incLossFactor, incWinFactor, numTours, cote, profitTarget=null) {
     let currentBankroll = bankroll;
     let bet = baseBet;
     const results = [];
@@ -71,16 +75,18 @@ function simulateDice(bankroll, baseBet, increaseFactor, numTours, cote, profitT
     for (let i = 0; i < numTours; i++) {
         if (bet > currentBankroll) break;
 
-        if (Math.random() < pGain) { // gain
+        if (Math.random() < pGain) { // GAIN
             currentBankroll += bet * (cote - 1);
-            bet = baseBet;
             currentLossStreak = 0;
-        } else { // perte
+            bet = bet * incWinFactor; // progression sur victoire
+            if (bet < baseBet) bet = baseBet; // sécurité
+        } else { // PERTE
             currentBankroll -= bet;
-            bet *= increaseFactor;
             currentLossStreak++;
             if (currentLossStreak > maxLossStreak) maxLossStreak = currentLossStreak;
+            bet *= incLossFactor; // progression sur perte
         }
+
         results.push(currentBankroll);
 
         // stop si objectif atteint
@@ -115,11 +121,12 @@ function renderChart(results, color, label="Bankroll (VEF)") {
 document.getElementById('simulateBtn').addEventListener('click', () => {
     const bankroll = parseFloat(document.getElementById('bankroll').value);
     const baseBet = parseFloat(document.getElementById('baseBet').value);
-    const increase = parseFloat(document.getElementById('increase').value)/100 + 1;
+    const incLoss = parseFloat(document.getElementById('increaseLoss').value)/100 + 1;
+    const incWin = parseFloat(document.getElementById('increaseWin').value)/100 + 1;
     const odds = parseFloat(document.getElementById('odds').value);
     const tours = parseInt(document.getElementById('tours').value);
 
-    const {results, maxDrawdown, finalBankroll, maxLossStreak} = simulateDice(bankroll, baseBet, increase, tours, odds);
+    const {results, maxDrawdown, finalBankroll, maxLossStreak} = simulateDice(bankroll, baseBet, incLoss, incWin, tours, odds);
 
     renderChart(results, 'rgb(59,130,246)');
     document.getElementById('summary').innerHTML = `
@@ -135,12 +142,13 @@ document.getElementById('simulateBtn').addEventListener('click', () => {
 document.getElementById('simulateProfitBtn').addEventListener('click', () => {
     const bankroll = parseFloat(document.getElementById('bankroll').value);
     const baseBet = parseFloat(document.getElementById('baseBet').value);
-    const increase = parseFloat(document.getElementById('increase').value)/100 + 1;
+    const incLoss = parseFloat(document.getElementById('increaseLoss').value)/100 + 1;
+    const incWin = parseFloat(document.getElementById('increaseWin').value)/100 + 1;
     const odds = parseFloat(document.getElementById('odds').value);
     const profitTarget = parseFloat(document.getElementById('profitTarget').value);
     const tours = 1000000; // limite max sécurité
 
-    const {results, maxDrawdown, finalBankroll, maxLossStreak} = simulateDice(bankroll, baseBet, increase, tours, odds, profitTarget);
+    const {results, maxDrawdown, finalBankroll, maxLossStreak} = simulateDice(bankroll, baseBet, incLoss, incWin, tours, odds, profitTarget);
 
     renderChart(results, 'rgb(147,51,234)');
     document.getElementById('summary').innerHTML = `
