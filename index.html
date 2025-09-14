@@ -62,7 +62,7 @@
 const ctx = document.getElementById('bankrollChart').getContext('2d');
 let chart = null;
 
-function simulateDice(bankroll, baseBet, incLossFactor, incWinFactor, numTours, cote, profitTarget=null) {
+function simulateDice(bankroll, baseBet, incLossFactor, numTours, cote, profitTarget=null) {
     let currentBankroll = bankroll;
     let bet = baseBet;
     const results = [];
@@ -75,16 +75,17 @@ function simulateDice(bankroll, baseBet, incLossFactor, incWinFactor, numTours, 
     for (let i = 0; i < numTours; i++) {
         if (bet > currentBankroll) break;
 
-        if (Math.random() < pGain) { // GAIN
+        if (Math.random() < pGain) { 
+            // GAIN → reset mise
             currentBankroll += bet * (cote - 1);
             currentLossStreak = 0;
-            bet = bet * incWinFactor; // progression sur victoire
-            if (bet < baseBet) bet = baseBet; // sécurité
-        } else { // PERTE
+            bet = baseBet; // toujours revenir à la mise initiale
+        } else { 
+            // PERTE → on augmente la mise
             currentBankroll -= bet;
             currentLossStreak++;
             if (currentLossStreak > maxLossStreak) maxLossStreak = currentLossStreak;
-            bet *= incLossFactor; // progression sur perte
+            bet *= incLossFactor; // progression uniquement sur la perte
         }
 
         results.push(currentBankroll);
@@ -98,6 +99,7 @@ function simulateDice(bankroll, baseBet, incLossFactor, incWinFactor, numTours, 
 
     return {results, maxDrawdown, finalBankroll, maxLossStreak};
 }
+
 
 function renderChart(results, color, label="Bankroll (VEF)") {
     if(chart) chart.destroy();
