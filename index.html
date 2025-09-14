@@ -31,6 +31,10 @@
         <input id="odds" type="number" value="3" step="0.1" class="w-full border rounded p-2">
       </div>
       <div>
+        <label class="block font-medium mb-1">Probabilité de gain (%)</label>
+        <input id="winProb" type="number" value="33" step="0.1" class="w-full border rounded p-2">
+      </div>
+      <div>
         <label class="block font-medium mb-1">Tours par jour</label>
         <input id="tours" type="number" value="2000" class="w-full border rounded p-2">
       </div>
@@ -59,14 +63,14 @@ const ctx = document.getElementById('bankrollChart').getContext('2d');
 let chart = null;
 
 // Simulation : progression uniquement sur perte
-function simulateDice(bankroll, baseBet, incLossFactor, numTours, cote, profitTarget=null) {
+function simulateDice(bankroll, baseBet, incLossFactor, numTours, winProb, profitTarget=null) {
     let currentBankroll = bankroll;
     let bet = baseBet;
     const results = [];
 
     let currentLossStreak = 0;
     let maxLossStreak = 0;
-    const pGain = 1 / cote;
+    const pGain = winProb / 100; // probabilité de gain personnalisée
     const target = profitTarget ? bankroll + profitTarget : null;
 
     for (let i = 0; i < numTours; i++) {
@@ -74,7 +78,7 @@ function simulateDice(bankroll, baseBet, incLossFactor, numTours, cote, profitTa
 
         if (Math.random() < pGain) { 
             // GAIN → reset mise
-            currentBankroll += bet * (cote - 1);
+            currentBankroll += bet * ((1 / pGain) - 1); // utilise la cote implicite
             currentLossStreak = 0;
             bet = baseBet;
         } else { 
@@ -120,10 +124,10 @@ document.getElementById('simulateBtn').addEventListener('click', () => {
     const bankroll = parseFloat(document.getElementById('bankroll').value);
     const baseBet = parseFloat(document.getElementById('baseBet').value);
     const incLoss = parseFloat(document.getElementById('increaseLoss').value)/100 + 1;
-    const odds = parseFloat(document.getElementById('odds').value);
+    const winProb = parseFloat(document.getElementById('winProb').value);
     const tours = parseInt(document.getElementById('tours').value);
 
-    const {results, maxDrawdown, finalBankroll, maxLossStreak} = simulateDice(bankroll, baseBet, incLoss, tours, odds);
+    const {results, maxDrawdown, finalBankroll, maxLossStreak} = simulateDice(bankroll, baseBet, incLoss, tours, winProb);
 
     renderChart(results, 'rgb(59,130,246)');
     document.getElementById('summary').innerHTML = `
@@ -140,11 +144,11 @@ document.getElementById('simulateProfitBtn').addEventListener('click', () => {
     const bankroll = parseFloat(document.getElementById('bankroll').value);
     const baseBet = parseFloat(document.getElementById('baseBet').value);
     const incLoss = parseFloat(document.getElementById('increaseLoss').value)/100 + 1;
-    const odds = parseFloat(document.getElementById('odds').value);
+    const winProb = parseFloat(document.getElementById('winProb').value);
     const profitTarget = parseFloat(document.getElementById('profitTarget').value);
     const tours = 1000000;
 
-    const {results, maxDrawdown, finalBankroll, maxLossStreak} = simulateDice(bankroll, baseBet, incLoss, tours, odds, profitTarget);
+    const {results, maxDrawdown, finalBankroll, maxLossStreak} = simulateDice(bankroll, baseBet, incLoss, tours, winProb, profitTarget);
 
     renderChart(results, 'rgb(147,51,234)');
     document.getElementById('summary').innerHTML = `
