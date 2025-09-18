@@ -25,11 +25,16 @@
     </div>
     <div>
       <label class="block font-medium mb-1">Augmentation après perte (%)</label>
-      <input id="diceIncreaseLoss" type="number" value="45" class="w-full border rounded p-2">
+      <input id="diceIncreaseLoss" type="number" value="64.44" class="w-full border rounded p-2">
+    </div>
+    <div>
+      <label class="block font-medium mb-1">Augmentation après gain (%)</label>
+      <input id="diceIncreaseWin" type="number" value="0" class="w-full border rounded p-2">
+      <p class="text-sm text-gray-500">Mettez 0 pour réinitialiser à la mise de départ</p>
     </div>
     <div>
       <label class="block font-medium mb-1">Probabilité de gain (%)</label>
-      <input id="diceWinProb" type="number" value="33.33" step="0.01" class="w-full border rounded p-2">
+      <input id="diceWinProb" type="number" value="50" step="0.01" class="w-full border rounded p-2">
     </div>
     <div>
       <label class="block font-medium mb-1">Tours à simuler</label>
@@ -40,40 +45,6 @@
     </button>
   </div>
 </div>
-
-<!-- Paramètres Roulette
-<div class="bg-white shadow-md rounded-lg p-6 w-full max-w-xl mb-6">
-  <h2 class="text-xl font-bold mb-4">Paramètres Roulette</h2>
-  <div class="space-y-4">
-    <div>
-      <label class="block font-medium mb-1">Bankroll initiale (VEF)</label>
-      <input id="rouletteBankroll" type="number" value="1000000000" class="w-full border rounded p-2">
-    </div>
-    <div>
-      <label class="block font-medium mb-1">Mise de départ (VEF)</label>
-      <input id="rouletteBaseBet" type="number" value="100000" class="w-full border rounded p-2">
-    </div>
-    <div>
-      <label class="block font-medium mb-1">Stratégie</label>
-      <select id="rouletteStrategy" class="w-full border rounded p-2">
-        <option value="martingale">Martingale (double après perte)</option>
-        <option value="fibonacci">Fibonacci (suite après perte)</option>
-        <option value="flat">Mise fixe</option>
-      </select>
-    </div>
-    <div>
-      <label class="block font-medium mb-1">Probabilité de gain (%)</label>
-      <input id="rouletteWinProb" type="number" value="48.65" step="0.01" class="w-full border rounded p-2">
-    </div>
-    <div>
-      <label class="block font-medium mb-1">Tours à simuler</label>
-      <input id="rouletteTours" type="number" value="1000" class="w-full border rounded p-2">
-    </div>
-    <button id="simulateRouletteBtn" class="w-full bg-purple-600 text-white font-bold py-2 px-4 rounded hover:bg-purple-700">
-      Lancer simulation Roulette
-    </button>
-  </div>
-</div> -->
 
 <!-- Résultats -->
 <div class="bg-white shadow-md rounded-lg p-6 w-full max-w-5xl">
@@ -86,8 +57,8 @@
 const ctx = document.getElementById('bankrollChart').getContext('2d');
 let chart = null;
 
-// Dice : progression sur perte
-function simulateDice(bankroll, baseBet, incLossFactor, winProb, numTours) {
+// Dice : progression sur perte/gain
+function simulateDice(bankroll, baseBet, incLossFactor, incWinFactor, winProb, numTours) {
   let currentBankroll = bankroll;
   let bet = baseBet;
   const results = [];
@@ -98,48 +69,20 @@ function simulateDice(bankroll, baseBet, incLossFactor, winProb, numTours) {
   for(let i=0;i<numTours;i++){
     if(bet>currentBankroll) break;
     if(Math.random()<pGain){
-      currentBankroll += bet*(3-1); // cote fixe 3
+      // Victoire (cote fixée à 1.98 ici)
+      currentBankroll += bet*(1.98-1);
       currentLossStreak=0;
-      bet = baseBet;
+      if(incWinFactor===1 || incWinFactor===0){
+        bet = baseBet; // reset
+      }else{
+        bet *= incWinFactor; // progression après gain
+      }
     }else{
+      // Défaite
       currentBankroll -= bet;
       currentLossStreak++;
       if(currentLossStreak>maxLossStreak) maxLossStreak=currentLossStreak;
-      bet *= incLossFactor;
-    }
-    results.push(currentBankroll);
-  }
-
-  const maxDrawdown = Math.max(...results.map(v=>Math.max(...results)-v));
-  const finalBankroll = results[results.length-1]||currentBankroll;
-  return {results, maxDrawdown, finalBankroll, maxLossStreak};
-}
-
-// Roulette
-function simulateRoulette(bankroll, baseBet, strategy, winProb, numTours){
-  let currentBankroll = bankroll;
-  let bet = baseBet;
-  const results=[];
-  let currentLossStreak=0;
-  let maxLossStreak=0;
-  const fibonacciSeq=[1,1,2,3,5,8,13,21,34,55,89,144];
-  let fibIndex=0;
-  const pGain = winProb/100;
-
-  for(let i=0;i<numTours;i++){
-    if(bet>currentBankroll) break;
-    const win=Math.random()<pGain;
-    if(win){
-      currentBankroll += bet;
-      currentLossStreak=0;
-      if(strategy==="martingale") bet=baseBet;
-      else if(strategy==="fibonacci"){ fibIndex=0; bet=baseBet;}
-    }else{
-      currentBankroll -= bet;
-      currentLossStreak++;
-      if(currentLossStreak>maxLossStreak) maxLossStreak=currentLossStreak;
-      if(strategy==="martingale") bet*=2;
-      else if(strategy==="fibonacci"){ fibIndex=Math.min(fibIndex+1,fibonacciSeq.length-1); bet=baseBet*fibonacciSeq[fibIndex];}
+      bet *= incLossFactor; // progression après perte
     }
     results.push(currentBankroll);
   }
@@ -167,24 +110,12 @@ document.getElementById('simulateDiceBtn').addEventListener('click',()=>{
   const bankroll=parseFloat(document.getElementById('diceBankroll').value);
   const baseBet=parseFloat(document.getElementById('diceBaseBet').value);
   const incLoss=parseFloat(document.getElementById('diceIncreaseLoss').value)/100+1;
+  const incWin=parseFloat(document.getElementById('diceIncreaseWin').value)/100+1;
   const winProb=parseFloat(document.getElementById('diceWinProb').value);
   const tours=parseInt(document.getElementById('diceTours').value);
 
-  const {results,maxDrawdown,finalBankroll,maxLossStreak}=simulateDice(bankroll,baseBet,incLoss,winProb,tours);
+  const {results,maxDrawdown,finalBankroll,maxLossStreak}=simulateDice(bankroll,baseBet,incLoss,incWin,winProb,tours);
   renderChart(results,'rgb(59,130,246)');
-  document.getElementById('summary').innerHTML=`Bankroll finale : <span class="font-bold">${finalBankroll.toLocaleString()} VEF</span><br>Max drawdown : <span class="font-bold">${maxDrawdown.toLocaleString()} VEF</span>`;
-  document.getElementById('maxLossStreak').innerHTML=`Plus longue série de pertes : <span class="font-bold">${maxLossStreak}</span> tours`;
-});
-
-document.getElementById('simulateRouletteBtn').addEventListener('click',()=>{
-  const bankroll=parseFloat(document.getElementById('rouletteBankroll').value);
-  const baseBet=parseFloat(document.getElementById('rouletteBaseBet').value);
-  const strategy=document.getElementById('rouletteStrategy').value;
-  const winProb=parseFloat(document.getElementById('rouletteWinProb').value);
-  const tours=parseInt(document.getElementById('rouletteTours').value);
-
-  const {results,maxDrawdown,finalBankroll,maxLossStreak}=simulateRoulette(bankroll,baseBet,strategy,winProb,tours);
-  renderChart(results,'rgb(147,51,234)');
   document.getElementById('summary').innerHTML=`Bankroll finale : <span class="font-bold">${finalBankroll.toLocaleString()} VEF</span><br>Max drawdown : <span class="font-bold">${maxDrawdown.toLocaleString()} VEF</span>`;
   document.getElementById('maxLossStreak').innerHTML=`Plus longue série de pertes : <span class="font-bold">${maxLossStreak}</span> tours`;
 });
