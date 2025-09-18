@@ -33,11 +33,26 @@
       <p class="text-sm text-gray-500">Mettez 0 pour réinitialiser à la mise de départ</p>
     </div>
     <div>
-      <label class="block font-medium mb-1">Probabilité de gain (%)</label>
-      <input id="diceWinProb" type="number" value="50" step="0.01" class="w-full border rounded p-2">
+      <label class="block font-medium mb-1">Cote visée (payout)</label>
+      <input id="dicePayout" type="number" value="1.98" step="0.01" class="w-full border rounded p-2">
     </div>
     <div>
-      <label class="block font-medium mb-1">Tours à simuler</label>
+      <label class="block font-medium mb-1">Probabilité de gain (%)</label>
+      <input id="diceWinProb" type="number" value="50" step="0.01" class="w-full border rounded p-2">
+      <p class="text-sm text-gray-500">Si tu veux un calcul réaliste : 100 / cote</p>
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block font-medium mb-1">Objectif gain (%)</label>
+        <input id="diceStopWin" type="number" value="1" step="0.1" class="w-full border rounded p-2">
+      </div>
+      <div>
+        <label class="block font-medium mb-1">Stop perte (%)</label>
+        <input id="diceStopLoss" type="number" value="10" step="0.1" class="w-full border rounded p-2">
+      </div>
+    </div>
+    <div>
+      <label class="block font-medium mb-1">Nombre de tours max</label>
       <input id="diceTours" type="number" value="2000" class="w-full border rounded p-2">
     </div>
     <button id="simulateDiceBtn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700">
@@ -51,14 +66,15 @@
   <canvas id="bankrollChart" class="w-full h-64 mb-6"></canvas>
   <div id="summary" class="text-gray-700 font-medium"></div>
   <div id="maxLossStreak" class="text-gray-700 font-medium mt-2"></div>
+  <div id="stopReason" class="text-gray-700 font-medium mt-2"></div>
 </div>
 
 <script>
 const ctx = document.getElementById('bankrollChart').getContext('2d');
 let chart = null;
 
-// Dice : progression sur perte/gain
-function simulateDice(bankroll, baseBet, incLossFactor, incWinFactor, winProb, numTours) {
+// Simulation Dice avec payout personnalisé
+function simulateDice(bankroll, baseBet, incLossFactor, incWinFactor, winProb, payout, stopWinPct, stopLossPct, maxTours) {
   let currentBankroll = bankroll;
   let bet = baseBet;
   const results = [];
@@ -66,58 +82,94 @@ function simulateDice(bankroll, baseBet, incLossFactor, incWinFactor, winProb, n
   let maxLossStreak = 0;
   const pGain = winProb / 100;
 
-  for(let i=0;i<numTours;i++){
-    if(bet>currentBankroll) break;
-    if(Math.random()<pGain){
-      // Victoire (cote fixée à 1.98 ici)
-      currentBankroll += bet*(1.98-1);
-      currentLossStreak=0;
-      if(incWinFactor===1 || incWinFactor===0){
-        bet = baseBet; // reset
-      }else{
-        bet *= incWinFactor; // progression après gain
-      }
-    }else{
+  const profitTarget = bankroll * (1 + stopWinPct / 100);
+  const stopLoss = bankroll * (1 - stopLossPct / 100);
+
+  let i = 0;
+  let reason = "Max tours atteints";
+
+  while (i < maxTours) {
+    if (bet > currentBankroll) {
+      reason = "Bankroll trop faible pour miser";
+      break;
+    }
+    if (currentBankroll >= profitTarget) {
+      reason = `Objectif gain atteint (+${stopWinPct}%)`;
+      break;
+    }
+    if (currentBankroll <= stopLoss) {
+      reason = `Stop perte atteint (-${stopLossPct}%)`;
+      break;
+    }
+
+    if (Math.random() < pGain) {
+      // Victoire
+      currentBankroll += bet * (payout - 1);
+      currentLossStreak = 0;
+      bet = (incWinFactor === 1 || incWinFactor === 0) ? baseBet : bet * incWinFactor;
+    } else {
       // Défaite
       currentBankroll -= bet;
       currentLossStreak++;
-      if(currentLossStreak>maxLossStreak) maxLossStreak=currentLossStreak;
-      bet *= incLossFactor; // progression après perte
+      if (currentLossStreak > maxLossStreak) maxLossStreak = currentLossStreak;
+      bet *= incLossFactor;
     }
+
     results.push(currentBankroll);
+    i++;
   }
 
-  const maxDrawdown = Math.max(...results.map(v=>Math.max(...results)-v));
-  const finalBankroll = results[results.length-1]||currentBankroll;
-  return {results, maxDrawdown, finalBankroll, maxLossStreak};
+  const maxDrawdown = Math.max(...results.map(v => Math.max(...results) - v));
+  const finalBankroll = results[results.length - 1] || currentBankroll;
+  return {results, maxDrawdown, finalBankroll, maxLossStreak, tours: i, reason};
 }
 
 // Graphique
-function renderChart(results, color, label="Bankroll (VEF)"){
-  if(chart) chart.destroy();
-  chart=new Chart(ctx,{
-    type:'line',
-    data:{
-      labels: results.map((_,i)=>i+1),
-      datasets:[{label,data:results,borderColor:color,backgroundColor:color.replace("rgb","rgba").replace(")",",0.2)"),tension:0.2}]
+function renderChart(results, color) {
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: results.map((_, i) => i + 1),
+      datasets: [{
+        label: "Bankroll (VEF)",
+        data: results,
+        borderColor: color,
+        backgroundColor: color.replace("rgb", "rgba").replace(")", ",0.2)"),
+        tension: 0.2
+      }]
     },
-    options:{responsive:true, plugins:{legend:{display:false}}}
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } }
+    }
   });
 }
 
-// Événements
-document.getElementById('simulateDiceBtn').addEventListener('click',()=>{
-  const bankroll=parseFloat(document.getElementById('diceBankroll').value);
-  const baseBet=parseFloat(document.getElementById('diceBaseBet').value);
-  const incLoss=parseFloat(document.getElementById('diceIncreaseLoss').value)/100+1;
-  const incWin=parseFloat(document.getElementById('diceIncreaseWin').value)/100+1;
-  const winProb=parseFloat(document.getElementById('diceWinProb').value);
-  const tours=parseInt(document.getElementById('diceTours').value);
+// Lancer simulation
+document.getElementById('simulateDiceBtn').addEventListener('click', () => {
+  const bankroll = parseFloat(document.getElementById('diceBankroll').value);
+  const baseBet = parseFloat(document.getElementById('diceBaseBet').value);
+  const incLoss = parseFloat(document.getElementById('diceIncreaseLoss').value) / 100 + 1;
+  const incWin = parseFloat(document.getElementById('diceIncreaseWin').value) / 100 + 1;
+  const payout = parseFloat(document.getElementById('dicePayout').value);
+  const winProb = parseFloat(document.getElementById('diceWinProb').value);
+  const stopWinPct = parseFloat(document.getElementById('diceStopWin').value);
+  const stopLossPct = parseFloat(document.getElementById('diceStopLoss').value);
+  const tours = parseInt(document.getElementById('diceTours').value);
 
-  const {results,maxDrawdown,finalBankroll,maxLossStreak}=simulateDice(bankroll,baseBet,incLoss,incWin,winProb,tours);
-  renderChart(results,'rgb(59,130,246)');
-  document.getElementById('summary').innerHTML=`Bankroll finale : <span class="font-bold">${finalBankroll.toLocaleString()} VEF</span><br>Max drawdown : <span class="font-bold">${maxDrawdown.toLocaleString()} VEF</span>`;
-  document.getElementById('maxLossStreak').innerHTML=`Plus longue série de pertes : <span class="font-bold">${maxLossStreak}</span> tours`;
+  const {results, maxDrawdown, finalBankroll, maxLossStreak, tours: totalTours, reason} =
+    simulateDice(bankroll, baseBet, incLoss, incWin, winProb, payout, stopWinPct, stopLossPct, tours);
+
+  renderChart(results, 'rgb(59,130,246)');
+  document.getElementById('summary').innerHTML =
+    `Bankroll finale : <span class="font-bold">${finalBankroll.toLocaleString()} VEF</span><br>
+     Max drawdown : <span class="font-bold">${maxDrawdown.toLocaleString()} VEF</span><br>
+     Nombre de tours joués : <span class="font-bold">${totalTours}</span>`;
+  document.getElementById('maxLossStreak').innerHTML =
+    `Plus longue série de pertes : <span class="font-bold">${maxLossStreak}</span> tours`;
+  document.getElementById('stopReason').innerHTML =
+    `Raison d'arrêt : <span class="font-bold">${reason}</span>`;
 });
 </script>
 
